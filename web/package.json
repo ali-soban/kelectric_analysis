@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node test_parse.mjs"
+  },
+  "devDependencies": {
+    "chart.js": "4.4.1",
+    "pdfjs-dist": "4.10.38"
+  }
+}

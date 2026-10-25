@@ -1,0 +1,5 @@
+# Cloudflare Pages: the page may run only its own scripts and may not send data anywhere (connect-src 'none').
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff

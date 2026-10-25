@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KE Net Metering</title>
+<script src="vendor/chart.umd.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f3f0; --surface: #fcfcfb; --border: #e4e2dc; --grid: #ecebe7;
+  --text: #0b0b0b; --text-2: #52514e; --text-3: #7a7974;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --good: #008300; --bad: #c13a39; --manual: #f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c; --grid: #2a2a28;
+    --text: #ffffff; --text-2: #c3c2b7; --text-3: #8f8e86;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --good: #3fae3f; --bad: #e66767; --manual: #262624;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --border: #2e2e2c; --grid: #2a2a28;
+  --text: #ffffff; --text-2: #c3c2b7; --text-3: #8f8e86;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --good: #3fae3f; --bad: #e66767; --manual: #262624;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 48px; }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; margin-bottom: 20px; }
+h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.sub { color: var(--text-2); margin-top: 2px; }
+.seg { max-width: 100%; overflow-x: auto; display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { white-space: nowrap; border: 0; background: none; color: var(--text-2); padding: 7px 14px; font: inherit; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--surface); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+.kpis { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.kpi .label { color: var(--text-2); font-size: 13px; }
+.kpi .value { font-size: 26px; font-weight: 600; margin-top: 4px; letter-spacing: -0.01em; }
+.kpi .note { color: var(--text-3); font-size: 12px; margin-top: 2px; }
+.kpi.hero .value { font-size: clamp(32px, 3.4vw, 48px); line-height: 1.05; white-space: nowrap; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.card .desc { color: var(--text-2); font-size: 13px; margin: 2px 0 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--text-2); font-size: 12.5px; margin-bottom: 8px; }
+.legend span::before { content: ""; display: inline-block; width: 14px; height: 2px; border-radius: 1px;
+  background: var(--c); vertical-align: middle; margin-right: 6px; }
+.legend .box::before { height: 10px; width: 10px; border-radius: 2px; }
+.chart { position: relative; height: 260px; }
+.foot { color: var(--text-3); font-size: 12px; margin-top: 16px; }
+.tablecard { margin-top: 12px; }
+.tablewrap { overflow-x: auto; margin-top: 10px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 13px; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th { color: var(--text-2); font-weight: 500; position: sticky; top: 0; background: var(--surface); }
+th:first-child, td:first-child { text-align: left; }
+.spot { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 28px; margin-bottom: 12px; }
+.eyebrow { font-size: 15px; font-weight: 600; }
+.label { color: var(--text-2); font-size: 13px; }
+.spot-hero { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: end; margin: 10px 0 18px; }
+.hero-num { font-size: clamp(40px, 10vw, 52px); font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; white-space: nowrap; }
+.flow { display: grid; grid-template-columns: auto auto; gap: 2px 14px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.flow b { color: var(--text); font-weight: 500; text-align: right; }
+.flow .total { border-top: 1px solid var(--border); padding-top: 2px; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 18px; border-top: 1px solid var(--grid); padding-top: 16px; }
+.metric .v { font-size: 20px; font-weight: 600; margin-top: 2px; white-space: nowrap; }
+.delta { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.delta.good { color: var(--good); }
+.delta.bad { color: var(--bad); }
+.spot-side { border-left: 1px solid var(--grid); padding-left: 28px; }
+.bd { display: grid; grid-template-columns: max-content 1fr auto; gap: 7px 10px; align-items: center; font-size: 13px; }
+.bd .name { color: var(--text-2); }
+.bd .track { height: 10px; }
+.bd .fill { height: 10px; border-radius: 0 4px 4px 0; background: var(--s1); min-width: 2px; }
+.bd .fill.neg { background: var(--text-3); }
+.bd .amt { text-align: right; font-variant-numeric: tabular-nums; }
+.section-head { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between; margin: 8px 0 12px; }
+.section-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+/* upload + solar entry */
+.inputs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
+.drop { display: block; border: 1.5px dashed var(--border); border-radius: 10px; padding: 22px 16px; text-align: center; cursor: pointer; color: var(--text-2); }
+.drop:hover, .drop.over, .drop:focus-within { border-color: var(--s1); color: var(--text); }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop strong { color: var(--text); }
+.files { list-style: none; padding: 0; margin: 12px 0 0; font-size: 13px; display: grid; gap: 4px; }
+.files li { display: flex; gap: 8px; }
+.files .st { flex: none; width: 1.2em; text-align: center; }
+.files .ok .st { color: var(--good); }
+.files .bad .st { color: var(--bad); }
+.files .skip { color: var(--text-3); }
+.files .name { color: var(--text-2); overflow-wrap: anywhere; }
+.files b { font-weight: 500; color: var(--text); }
+.note-box { margin-top: 10px; font-size: 13px; color: var(--text-2); }
+.solar { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 14px; }
+.solar label { display: grid; gap: 3px; font-size: 12.5px; color: var(--text-2); }
+.solar input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%; }
+.solar input:focus { outline: 2px solid var(--s1); outline-offset: -1px; }
+@media (max-width: 900px) {
+  .spot { grid-template-columns: minmax(0, 1fr); }
+  .spot-side { border-left: 0; padding-left: 0; border-top: 1px solid var(--grid); padding-top: 16px; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi.hero { grid-column: 1 / -1; }
+  .grid, .inputs { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>KE net metering</h1>
+      <div class="sub" id="sub">Your bills are read in this browser. Nothing is uploaded anywhere.</div>
+    </div>
+  </header>
+
+  <section class="inputs">
+    <div class="card">
+      <h2>Your bills</h2>
+      <div class="desc">K-Electric net-metering bill PDFs, Aug-2025 or later. Add as many months as you have.
+        Don't have them? Download each month from <a href="https://staging.ke.com.pk:24555/" target="_blank" rel="noopener">K-Electric's bill site</a> (enter your account number and the CAPTCHA), then drop the PDFs here.</div>
+      <label class="drop" id="drop">
+        <input type="file" id="pick" accept="application/pdf,.pdf" multiple>
+        <strong>Choose PDFs</strong> or drop them here
+      </label>
+      <ul class="files" id="files" aria-live="polite"></ul>
+      <div class="note-box" id="note"></div>
+    </div>
+    <div class="card" id="solar-card" hidden>
+      <h2>Solar production</h2>
+      <div class="desc">kWh from your inverter app, for the calendar month before each bill. Optional: without it, savings can't be worked out.</div>
+      <div class="solar" id="solar"></div>
+    </div>
+  </section>
+
+  <div id="dash" hidden>
+  <section class="card spot">
+    <div class="spot-main">
+      <div class="eyebrow" id="sp-title"></div>
+      <div class="spot-hero">
+        <div><div class="label">Payable</div><div class="hero-num" id="sp-pay"></div></div>
+        <div class="flow" id="sp-flow"></div>
+      </div>
+      <div class="metrics" id="sp-metrics"></div>
+    </div>
+    <div class="spot-side" id="sp-side">
+      <h2>Where the bill went</h2>
+      <div class="desc" id="sp-bd-desc"></div>
+      <div id="sp-bd"></div>
+    </div>
+  </section>
+
+  <div class="section-head">
+    <h2>Trends</h2>
+    <div class="seg" role="group" aria-label="Range">
+      <button data-range="all" aria-pressed="true">All</button>
+      <button data-range="12">12 bills</button>
+      <button data-range="6">6 bills</button>
+      <button data-range="3">3 bills</button>
+    </div>
+  </div>
+
+  <section class="kpis">
+    <div class="card kpi hero"><div class="label">Saved by solar</div><div class="value" id="k-saved"></div><div class="note" id="k-saved-note"></div></div>
+    <div class="card kpi"><div class="label">Credit with KE now</div><div class="value" id="k-credit"></div><div class="note" id="k-credit-note"></div></div>
+    <div class="card kpi"><div class="label">Paid to KE</div><div class="value" id="k-pay"></div><div class="note" id="k-pay-note"></div></div>
+    <div class="card kpi"><div class="label">Solar produced</div><div class="value" id="k-solar"></div><div class="note" id="k-solar-note"></div></div>
+    <div class="card kpi"><div class="label">Exported to KE</div><div class="value" id="k-exp"></div><div class="note" id="k-exp-note"></div></div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Energy per bill</h2><div class="desc">kWh</div>
+      <div class="legend"><span style="--c:var(--s1)">Solar produced</span><span style="--c:var(--s2)">Used from grid</span><span style="--c:var(--s3)">Exported</span></div>
+      <div class="chart"><canvas id="c-energy" aria-label="Energy per bill chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Bill with and without solar</h2><div class="desc">PKR · what you'd have paid vs what you paid</div>
+      <div class="legend"><span class="box" style="--c:var(--s2)">Without solar</span><span class="box" style="--c:var(--s1)">Paid</span></div>
+      <div class="chart"><canvas id="c-bill" aria-label="Bill comparison chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Saved per bill</h2><div class="desc">PKR · bill without solar minus amount paid</div>
+      <div class="chart"><canvas id="c-saved" aria-label="Savings per bill chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Total saved over time</h2><div class="desc">PKR · running total</div>
+      <div class="chart"><canvas id="c-cum" aria-label="Cumulative savings chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>What a unit costs</h2><div class="desc">PKR per kWh · tariff rates vs your all-in average</div>
+      <div class="legend"><span style="--c:var(--s1)">Off-peak rate</span><span style="--c:var(--s2)">Peak rate</span><span style="--c:var(--s3)">Your average (bill ÷ units)</span></div>
+      <div class="chart"><canvas id="c-rate" aria-label="Unit cost chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Carry-forward and PPP settlements</h2><div class="desc">kWh · surplus banked each month, settled at PPP each quarter</div>
+      <div class="legend"><span class="box" style="--c:var(--s1)">Carried forward</span><span class="box" style="--c:var(--s3)">Settled at PPP</span></div>
+      <div class="chart"><canvas id="c-cf" aria-label="Carry-forward chart" role="img"></canvas></div>
+    </div>
+  </section>
+
+  <section class="card tablecard">
+    <h2>All bills</h2>
+    <div class="tablewrap"><table id="tbl"></table></div>
+  </section>
+  <div class="foot">Saved = (bill + self-used solar × your average unit price) − amount paid. Solar production is the previous calendar month's total.</div>
+  </div>
+</div>
+
+<script type="module">
+import * as pdfjs from "./vendor/pdf.min.mjs";
+import { pdfText, parseBill, derive, BillError, label as lbl, MONTHS as MON } from "./parse.js";
+pdfjs.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdf.worker.min.mjs", import.meta.url).href;
+
+const n0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const n2 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pkr = v => v == null ? "–" : "Rs " + n0.format(v);
+const compact = v => v == null ? "–" : (Math.abs(v) >= 1e6 ? n2.format(v / 1e6) + "M" : Math.abs(v) >= 1e4 ? n0.format(v / 1e3) + "K" : n0.format(v));
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+// ---- state: everything stays in this tab; only solar numbers are remembered (localStorage)
+const parsed = {};   // account + bill (YYMM) -> parsed row
+const results = [];  // one line per file: { file, cls, text }
+let DATA = { rows: [] }, account = null, solar = {};
+const solarKey = () => "ke-solar-" + account;
+const loadSolar = () => { try { solar = JSON.parse(localStorage.getItem(solarKey())) || {}; } catch { solar = {}; } };
+const saveSolar = () => { try { localStorage.setItem(solarKey(), JSON.stringify(solar)); } catch {} };
+
+async function addFiles(files) {
+  for (const f of files) {
+    const r = { file: f.name, cls: "bad", text: "" };
+    results.push(r);
+    try {
+      const row = parseBill(await pdfText(pdfjs, new Uint8Array(await f.arrayBuffer())));
+      r.bill = row.bill; r.account = row.account;
+      r.cls = "ok"; r.text = (parsed[row.account + row.bill] ? "replaces the earlier copy of " : "") + lbl(row.bill) + " bill";
+      parsed[row.account + row.bill] = row;
+    } catch (e) {
+      if (e instanceof BillError) {
+        r.cls = e.kind === "regular" ? "skip" : "bad";
+        r.kind = e.kind;
+        r.text = e.kind === "bad" ? "couldn't be read reliably (" + e.message + "), left out" : e.message + ", skipped";
+      } else {
+        r.text = "not a readable PDF, skipped";
+      }
+    }
+  }
+  update();
+}
+
+function update() {
+  // Several accounts mixed in: keep the one with the newest bill.
+  const all = Object.values(parsed).sort((a, b) => a.bill.localeCompare(b.bill));
+  account = all.length ? all[all.length - 1].account : null;
+  loadSolar();
+  DATA = { rows: all.filter(r => r.account === account).map(r => derive({ ...r, C: solar[r.bill] ?? null })) };
+  renderFiles();
+  renderSolar();
+  $("dash").hidden = !DATA.rows.length;
+  if (!DATA.rows.length) return;
+  const first = DATA.rows[0], last = DATA.rows[DATA.rows.length - 1];
+  $("sub").textContent = "Bills " + lbl(first.bill) + " to " + lbl(last.bill) + (account ? " · account …" + account.slice(-4) : "") + " · read in this browser, nothing uploaded";
+  renderSpotlight();
+  if (window.Chart) render();
+}
+
+function renderFiles() {
+  const ul = $("files"); ul.replaceChildren();
+  for (const r of results) {
+    const other = r.cls === "ok" && r.account !== account;
+    const cls = other ? "bad" : r.cls;
+    const li = el("li", cls);
+    li.append(el("span", "st", { ok: "✓", skip: "–" }[cls] ?? "!"), el("span", "name"));
+    const text = other ? lbl(r.bill) + " bill is for a different account (…" + (r.account || "?").slice(-4) + "), left out" : r.text;
+    li.lastChild.append(el("b", null, r.file), " · " + text);
+    ul.append(li);
+  }
+  // Regular bills next to net-metering ones: say where net metering starts, so the gap isn't a surprise.
+  const regular = results.filter(r => r.kind === "regular").length;
+  const old = results.filter(r => r.kind === "old").length;
+  const notes = [];
+  if (regular && DATA.rows.length) notes.push(`Net metering starts with your ${lbl(DATA.rows[0].bill)} bill in these files; ${regular} earlier regular bill${regular > 1 ? "s were" : " was"} skipped.`);
+  else if (regular && !DATA.rows.length) notes.push("None of these are net-metering bills yet. Add one from after net metering was installed.");
+  if (old) notes.push("Bills from before Aug-2025 use KE's older layout, which this page can't read yet.");
+  if (results.some(r => r.cls === "bad" && r.kind === "bad")) notes.push("A bill that couldn't be read is left out rather than guessed at.");
+  $("note").textContent = notes.join(" ");
+}
+
+function renderSolar() {
+  const box = $("solar"); box.replaceChildren();
+  $("solar-card").hidden = !DATA.rows.length;
+  for (const r of DATA.rows) {
+    const m = +r.bill.slice(2), prev = MON[(m + 10) % 12];
+    const lab = el("label", null, prev + " (" + lbl(r.bill) + " bill)");
+    const inp = Object.assign(el("input"), { type: "number", min: 0, step: "any", inputMode: "decimal", value: solar[r.bill] ?? "", placeholder: "kWh" });
+    inp.addEventListener("change", () => {
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(v) && v >= 0) solar[r.bill] = v; else delete solar[r.bill];
+      saveSolar();
+      update();
+    });
+    lab.append(inp);
+    box.append(lab);
+  }
+}
+
+// ---- dashboard (same as dashboard_template.html, minus the hand-typed rows)
+let range = "all";
+const charts = [];
+
+function rows() {
+  return /^\d+$/.test(range) ? DATA.rows.slice(-range) : DATA.rows;
+}
+
+// Vertical hairline at the hovered bill.
+const crosshair = {
+  id: "crosshair",
+  afterDatasetsDraw(chart) {
+    const a = chart.tooltip?.getActiveElements?.();
+    if (!a || !a.length || chart.config.type !== "line") return;
+    const { ctx, chartArea } = chart, x = a[0].element.x;
+    ctx.save(); ctx.strokeStyle = css("--text-3"); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, chartArea.top); ctx.lineTo(x, chartArea.bottom); ctx.stroke(); ctx.restore();
+  }
+};
+
+function base(type, labels, datasets, rs, fmt) {
+  return {
+    type, data: { labels, datasets },
+    plugins: [crosshair],
+    options: {
+      maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: css("--surface"), titleColor: css("--text"), bodyColor: css("--text"),
+          footerColor: css("--text-3"), borderColor: css("--border"), borderWidth: 1, padding: 10,
+          usePointStyle: true, boxWidth: 8, boxHeight: 8,
+          callbacks: { label: c => " " + (c.raw == null ? "–" : fmt(c.raw)) + "  " + c.dataset.label }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { color: css("--border") }, ticks: { color: css("--text-2"), maxRotation: 0, autoSkipPadding: 12 } },
+        y: { grid: { color: css("--grid") }, border: { display: false }, ticks: { color: css("--text-2"), callback: v => compact(v) } }
+      }
+    }
+  };
+}
+const line = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2,
+  pointRadius: data.length < 2 ? 4 : 0, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHoverBorderColor: css("--surface"),
+  borderJoinStyle: "round", borderCapStyle: "round", tension: 0, spanGaps: false });
+const bar = (label, data, color) => ({ label, data, backgroundColor: color, maxBarThickness: 24,
+  borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: "start", borderColor: css("--surface"), borderWidth: { left: 1, right: 1 } });
+
+function render() {
+  charts.splice(0).forEach(c => c.destroy());
+  const rs = rows(), L = rs.map(r => lbl(r.bill));
+  const s1 = css("--s1"), s2 = css("--s2"), s3 = css("--s3");
+  const kwh = v => n0.format(v) + " kWh", rate = v => "Rs " + n2.format(v);
+
+  let cum = 0;
+  const cumul = rs.map(r => r.P == null ? null : (cum += r.P));
+
+  const make = (id, cfg) => charts.push(new Chart($(id), cfg));
+  make("c-energy", base("line", L, [
+    line("Solar produced", rs.map(r => r.C), s1),
+    line("Used from grid", rs.map(r => r.F + r.G), s2),
+    line("Exported", rs.map(r => r.E), s3)], rs, kwh));
+  make("c-bill", base("bar", L, [
+    bar("Without solar", rs.map(r => r.O), s2),
+    bar("Paid", rs.map(r => r.M), s1)], rs, pkr));
+  make("c-saved", base("bar", L, [bar("Saved", rs.map(r => r.P), s1)], rs, pkr));
+  make("c-cum", base("line", L, [{ ...line("Total saved", cumul, s1), fill: "origin", backgroundColor: s1 + "1a" }], rs, pkr));
+  make("c-rate", base("line", L, [
+    line("Off-peak rate", rs.map(r => r.I), s1),
+    line("Peak rate", rs.map(r => r.J), s2),
+    line("Your average", rs.map(r => r.K), s3)], rs, rate));
+  const cf = base("bar", L, [
+    bar("Carried forward", rs.map(r => r.L || 0), s1),
+    bar("Settled at PPP", rs.map(r => r.S || 0), s3)], rs, kwh);
+  cf.options.plugins.tooltip.callbacks.afterBody = items => {
+    const r = rs[items[0].dataIndex];
+    return r.S ? "PPP rate Rs " + n2.format(r.T) : "";
+  };
+  make("c-cf", cf);
+
+  // KPIs
+  const saved = rs.reduce((s, r) => s + (r.P || 0), 0);
+  const last = DATA.rows[DATA.rows.length - 1];
+  const solarSum = rs.reduce((s, r) => s + (r.C || 0), 0), exp = rs.reduce((s, r) => s + r.E, 0);
+  const span = rs.length ? lbl(rs[0].bill) + " to " + lbl(rs[rs.length - 1].bill) : "";
+  const noSolar = rs.filter(r => r.C == null).length;
+  $("k-saved").textContent = noSolar === rs.length ? "–" : pkr(saved);
+  $("k-saved-note").textContent = noSolar === rs.length ? "enter solar production to see this" : rs.length + " bills · " + span;
+  $("k-credit").textContent = pkr(last.Q);
+  $("k-credit-note").textContent = "after the " + lbl(last.bill) + " bill";
+  const paid = rs.reduce((s, r) => s + r.M, 0), billed = rs.reduce((s, r) => s + r.N, 0);
+  $("k-pay").textContent = pkr(paid);
+  $("k-pay-note").textContent = "of " + pkr(billed) + " billed";
+  $("k-solar").textContent = compact(solarSum) + " kWh";
+  $("k-solar-note").textContent = noSolar ? noSolar + " month(s) not entered yet" : span;
+  $("k-exp").textContent = compact(exp) + " kWh";
+  $("k-exp-note").textContent = solarSum ? Math.round(exp / solarSum * 100) + "% of production" : "";
+
+  renderTable(rs);
+}
+
+function renderTable(rs) {
+  const cols = [
+    ["Bill", r => lbl(r.bill)], ["Solar", r => r.C, n0], ["Self-used", r => r.D, n0], ["Exported", r => r.E, n0],
+    ["Off-peak", r => r.F, n0], ["Peak", r => r.G, n0], ["Off-peak rate", r => r.I, n2], ["Peak rate", r => r.J, n2],
+    ["Avg / unit", r => r.K, n2], ["C/F", r => r.L, n0], ["PPP units", r => r.S, n0], ["Billed", r => r.N, n0],
+    ["NM benefit", r => r.R, n0], ["Paid", r => r.M, n0], ["Without solar", r => r.O, n0], ["Saved", r => r.P, n0],
+    ["Credit", r => r.Q, n0]];
+  const t = $("tbl"); t.replaceChildren();
+  const hr = t.createTHead().insertRow();
+  cols.forEach(([h]) => hr.appendChild(el("th", null, h)));
+  const body = t.createTBody();
+  [...rs].reverse().forEach(r => {
+    const tr = body.insertRow();
+    cols.forEach(([, get, f]) => { const v = get(r); tr.insertCell().textContent = f ? (v == null ? "–" : f.format(v)) : v; });
+  });
+}
+
+// ---- latest bill (independent of the trend range)
+// [label, getter, unit formatter, higher is better?]
+const METRICS = [
+  ["Solar produced", r => r.C, v => n0.format(v) + " kWh", true],
+  ["Used from grid", r => r.F + r.G, v => n0.format(v) + " kWh", false],
+  ["Exported", r => r.E, v => n0.format(v) + " kWh", true],
+  ["Self-used solar", r => r.D, v => n0.format(v) + " kWh", true],
+  ["Billed", r => r.N, pkr, false],
+  ["NM benefit", r => r.R, pkr, true],
+  ["Saved", r => r.P, pkr, true],
+  ["Avg price / unit", r => r.K, v => "Rs " + n2.format(v), false],
+];
+
+function delta(cur, prev, upGood, vs) {
+  const d = el("div", "delta");
+  if (cur == null || prev == null) { d.textContent = vs ? "no data for " + vs : ""; return d; }
+  if (!prev) { d.textContent = "was 0 in " + vs; return d; }
+  const pct = (cur - prev) / Math.abs(prev) * 100;
+  const flat = Math.abs(pct) < 0.5;
+  d.textContent = (flat ? "● 0%" : (pct > 0 ? "▲ " : "▼ ") + n0.format(Math.abs(pct)) + "%") + " vs " + vs;
+  if (!flat) d.classList.add((pct > 0) === upGood ? "good" : "bad");
+  return d;
+}
+
+function renderSpotlight() {
+  const all = DATA.rows, i = all.length - 1, r = all[i];
+  const prev = all[i - 1], yago = all.find(x => x.bill === String(+r.bill.slice(0, 2) - 1).padStart(2, "0") + r.bill.slice(2));
+  const rd = r.reading && new Date(r.reading + "T00:00");
+  $("sp-title").textContent = lbl(r.bill) + " bill" + (rd ? " · meter read " + rd.getDate() + " " + MON[rd.getMonth()] + " " + rd.getFullYear() : "");
+  $("sp-pay").textContent = pkr(r.M);
+  const carry = (r.M - r.Q) - (r.N - r.R);
+  const flow = [["Billed", pkr(r.N)], ["NM benefit", "− " + pkr(r.R).slice(3)]];
+  if (Math.abs(carry) >= 1) flow.push([carry < 0 ? "Credit carried in" : "Dues carried in", (carry < 0 ? "− " : "+ ") + n0.format(Math.abs(carry))]);
+  flow.push([r.Q ? "Credit left with KE" : "Payable", r.Q ? pkr(r.Q) : pkr(r.M)]);
+  const f = $("sp-flow"); f.replaceChildren();
+  flow.forEach(([k, v], j) => {
+    const total = j === flow.length - 1 ? "total" : null;
+    f.append(el("span", total, k), el("b", total, v));
+  });
+
+  const m = $("sp-metrics"); m.replaceChildren();
+  METRICS.forEach(([name, get, fmt, up]) => {
+    const d = el("div", "metric"), cur = get(r);
+    d.append(el("div", "label", name), el("div", "v", cur == null ? "–" : fmt(cur)));
+    if (cur == null && name === "Solar produced") d.append(el("div", "delta", "enter it under Solar production"));
+    else {
+      d.append(delta(cur, prev && get(prev), up, prev && lbl(prev.bill)));
+      if (yago) d.append(delta(cur, get(yago), up, lbl(yago.bill)));
+    }
+    m.append(d);
+  });
+
+  const bd = r.breakdown, box = $("sp-bd");
+  $("sp-side").hidden = !bd;
+  if (!bd) return;
+  $("sp-bd-desc").textContent = "PKR · " + pkr(r.N) + " billed before the net-metering benefit";
+  const items = Object.entries(bd).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(...items.map(([, v]) => Math.abs(v)));
+  box.className = "bd"; box.replaceChildren();
+  items.forEach(([k, v]) => {
+    const track = el("div", "track"), fill = el("div", "fill" + (v < 0 ? " neg" : ""));
+    fill.style.width = (Math.abs(v) / max * 100) + "%";
+    fill.title = k + ": " + n2.format(v);
+    track.append(fill);
+    box.append(el("div", "name", k), track, el("div", "amt", (v < 0 ? "− " : "") + n0.format(Math.abs(v))));
+  });
+}
+
+// ---- wiring
+const drop = $("drop");
+$("pick").addEventListener("change", e => { addFiles([...e.target.files]); e.target.value = ""; });
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); addFiles([...e.dataTransfer.files]); });
+
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+  range = b.dataset.range;
+  document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  if (DATA.rows.length) render();
+}));
+const rerender = () => DATA.rows.length && window.Chart && render();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender);
+new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+if (!window.Chart) $("note").textContent = "Charts need an internet connection (Chart.js could not load).";
+</script>
+</body>
+</html>
